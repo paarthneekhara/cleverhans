@@ -13,19 +13,20 @@ import os
 # data directory
 flags.DEFINE_string("input_dir", "/data2/paarth/defenseData/Original_wav/", "location of input dir")
 flags.DEFINE_string("output_dir", "/data2/paarth/defenseData/Adversarial_Yao_Imperceptible/", "location of output dir")
+flags.DEFINE_string("output_dir_stage1", "/data2/paarth/defenseData/Adversarial_Yao_Imperceptible_stage1/", "location of output dir stage1")
 flags.DEFINE_string('input', 'defense_data.txt',
                     'Input audio .wav file(s), at 16KHz (separated by spaces)')
 
 # data processing
 flags.DEFINE_integer('window_size', '2048', 'window size in spectrum analysis')
-flags.DEFINE_integer('max_length_dataset', '223200', 
+flags.DEFINE_integer('max_length_dataset', '123265', 
                     'the length of the longest audio in the whole dataset')
 flags.DEFINE_float('initial_bound', '2000', 'initial l infinity norm for adversarial perturbation')
 
 # training parameters
 flags.DEFINE_string('checkpoint', "./model/ckpt-00908156",
                     'location of checkpoint')
-flags.DEFINE_integer('batch_size', '5', 'batch size')                   
+flags.DEFINE_integer('batch_size', '1', 'batch size')                   
 flags.DEFINE_float('lr_stage1', '100', 'learning_rate for stage 1')
 flags.DEFINE_float('lr_stage2', '1', 'learning_rate for stage 2')
 flags.DEFINE_integer('num_iter_stage1', '1000', 'number of iterations in stage 1')
@@ -211,7 +212,7 @@ class Attack:
         loss_th = [np.inf] * self.batch_size
         final_deltas = [None] * self.batch_size
         clock = 0
-        
+        worked = [False for i in range(self.batch_size)]
         for i in range(MAX):           
             now = time.time()
 
@@ -219,11 +220,13 @@ class Attack:
             sess.run(self.train1, feed_dict)   
             if i % 10 == 0:
                 d, cl, predictions, new_input = sess.run((self.delta, self.celoss, self.decoded, self.new_input), feed_dict)
+                print("worked:", worked)
              
             for ii in range(self.batch_size): 
                 # print out the prediction each 100 iterations
-                if i % 1000 == 0:                                 
-                    print("pred:{}".format(predictions['topk_decoded'][ii, 0]))
+                if i % 50 == 0:
+                    print ("---" * 50)
+                    print(ii, "pred:{}".format(predictions['topk_decoded'][ii, 0]))
                     #print("rescale: {}".format(sess.run(self.rescale[ii]))) 
                 if i % 10 == 0:
                     if i % 100 == 0:
@@ -241,7 +244,7 @@ class Attack:
 
                         # save the best adversarial example
                         final_deltas[ii] = new_input[ii]
-                   
+                        worked[ii] = True
                         print("Iteration i=%d, worked ii=%d celoss=%f bound=%f"%(i, ii, cl[ii], FLAGS.initial_bound * rescale[ii]))                                   
                         sess.run(tf.assign(self.rescale, rescale))
                                                       
@@ -250,7 +253,7 @@ class Attack:
                     final_deltas[ii] = new_input[ii]             
          
             if i % 10 == 0:
-                print("ten iterations take around {} ".format(clock))
+                print(i, "ten iterations take around {} ".format(clock))
                 clock = 0
              
             clock += time.time() - now
@@ -372,7 +375,7 @@ class Attack:
 
 def main(argv):
     data = np.loadtxt(FLAGS.input, dtype=str, delimiter=",")
-    data = data[:, FLAGS.num_gpu * 10 : (FLAGS.num_gpu + 1) * 10]
+    # data = data[:, FLAGS.num_gpu * 10 : (FLAGS.num_gpu + 1) * 10]
     num = len(data[0])
     batch_size = FLAGS.batch_size
     num_loops = num / batch_size 
@@ -380,6 +383,9 @@ def main(argv):
     
     if not os.path.isdir(FLAGS.output_dir):
         os.makedirs(FLAGS.output_dir)
+
+    if not os.path.isdir(FLAGS.output_dir_stage1):
+        os.makedirs(FLAGS.output_dir_stage1)
 
     with tf.device("/gpu:0"):
         tfconf = tf.ConfigProto(allow_soft_placement=True)
@@ -403,17 +409,18 @@ def main(argv):
                 # save the adversarial examples in stage 1
                 for i in range(batch_size):
                     print("Final distortion for stage 1", np.max(np.abs(adv_example[i][:lengths[i]] - audios[i, :lengths[i]])))                                      
-                    # name = data_sub[0, i]
-                    # saved_name = FLAGS.output_dir + str(name) + "_stage1.wav"                     
-                    # adv_example_float =  adv_example[i] / 32768.
-                    # wav.write(saved_name, 16000, np.array(adv_example_float[:lengths[i]]))
-                    # print(saved_name)                    
+                    name = data_sub[0, i]
+                    saved_name = FLAGS.output_dir_stage1 + str(name)
+                    adv_example_float =  adv_example[i] / 32768.
+                    wav.write(saved_name, 16000, np.array(adv_example_float[:lengths[i]]))
+                    print(saved_name)
                                     
                 # stage 2                
                 # read the adversarial examples saved in stage 1
                 adv = np.zeros([batch_size, FLAGS.max_length_dataset])
                 adv[:, :maxlen] = adv_example - audios
 
+                # skipping stage2
                 adv_example, loss_th, final_alpha = attack.attack_stage2(audios, trans, adv, th_batch, psd_max_batch, maxlen, sample_rate, masks, masks_freq, l, data_sub, FLAGS.lr_stage2)
                 
                 # save the adversarial examples in stage 2

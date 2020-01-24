@@ -1,5 +1,5 @@
 examples/adversarial_asr/model/ckpt-00908156.data-00000-of-00001
-
+*_rir_*.wav
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

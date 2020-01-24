@@ -11,7 +11,7 @@ from absl import app
 import argparse
 from os import listdir
 from os.path import isfile, join
-
+import json
 import sys
 
 def _get_file_names(audio_dir):
@@ -28,8 +28,9 @@ def _decode_audio(audio_dir, file_name):
 
   audios = []
   lengths = []
+
   if max(audio_temp) < 1:
-      audio_np = audio_temp * 32768    
+    audio_np = audio_temp * 32768    
   else:
     audio_np = audio_temp
 
@@ -49,7 +50,7 @@ def _decode_audio(audio_dir, file_name):
   audios_np[0, :lengths[0]] = audios[0]
   masks_freq[0, :lengths_freq[0], :] = 1
 
-  return audios_np, sample_rate_np, np.array(["dummy"]), masks_freq
+  return audios_np, sample_rate_np, np.array(["BROWSE TO EVIL DOT COM"]), masks_freq
 
 def main():
 
@@ -118,10 +119,10 @@ def main():
             wer_value = dec_metrics_dict['wer'].value * 100.
             transcriptions[file_name] = predictions['topk_decoded'][0, 0].lower()
             
-            print(fidx, "pred-{},{} : ".format(audio_dir, file_name, predictions['topk_decoded'][0, 0]))
+            print(fidx, "pred-{},{} : {}".format(audio_dir, file_name, predictions['topk_decoded'][0, 0]))
             
 
-          with open(join(audio_dir, "transcriptions.json", 'w')) as f:
+          with open(join(audio_dir, "transcriptions.json"), 'w') as f:
             f.write(json.dumps(transcriptions))
             
 if __name__ == '__main__':
