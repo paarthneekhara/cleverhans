@@ -111,9 +111,13 @@ def main():
                  sample_rate_tf: sample_rate, 
                  tgt_tf: tgt_np, 
                  mask_tf: mask_freq}
-          
-            losses = sess.run(loss, feed_dict)  
-            predictions = sess.run(decoded_outputs, feed_dict)
+            
+            try:
+              losses = sess.run(loss, feed_dict)  
+              predictions = sess.run(decoded_outputs, feed_dict)
+            except:
+              print ("Error in transcribing: ", file_name)
+              continue
             
             task.PostProcessDecodeOut(predictions, dec_metrics_dict)
             wer_value = dec_metrics_dict['wer'].value * 100.
